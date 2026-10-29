@@ -1,7 +1,4 @@
-
 name: Android APK test build
-
-on:name: Android APK test build
 
 on:
   workflow_dispatch:
@@ -85,40 +82,3 @@ jobs:
           name: ownnode-android-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
-
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-jobs:
-  android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
-      - name: Create Android project
-        run: flutter create --platforms=android --project-name own_node_vpn --org com.example.ownnode .
-
-      - name: Resolve dependencies
-        run: flutter pub get
-
-      - name: Build Android APK
-        run: flutter build apk --debug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ownnode-android-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
-    
