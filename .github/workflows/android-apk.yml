@@ -1,7 +1,91 @@
 
 name: Android APK test build
 
+on:name: Android APK test build
+
 on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Avoid silently building the Flutter sample app instead of this VPN app.
+      - name: Verify VPN application sources are uploaded
+        shell: bash
+        run: |
+          for f in lib/main.dart lib/brand.dart lib/node_links.dart lib/privacy_config.dart; do
+            if [ ! -s "$f" ]; then
+              echo "::error file=$f::VPN source missing. Extract and upload the lib/ directory at repository root."
+              exit 1
+            fi
+          done
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android project
+        run: flutter create --platforms=android --project-name own_node_vpn --org com.example.ownnode .
+
+      # The flutter_sing_box package requests com.github.singbox-android:libbox
+      # from JitPack. The default Flutter-generated Gradle project does not
+      # declare that Maven repository, so Gradle cannot resolve this dependency.
+      - name: Add JitPack repository for libbox
+        shell: bash
+        run: |
+          python3 - <<'PYFIX'
+          from pathlib import Path
+          candidates = [
+              (Path("android/build.gradle.kts"), 'maven { url = uri("https://jitpack.io") }'),
+              (Path("android/build.gradle"), "maven { url 'https://jitpack.io' }"),
+          ]
+          for path, repo_line in candidates:
+              if not path.is_file():
+                  continue
+              content = path.read_text(encoding="utf-8")
+              if "https://jitpack.io" not in content:
+                  anchor = "mavenCentral()"
+                  if anchor not in content:
+                      raise SystemExit(f"Cannot find {anchor} in {path}; inspect Gradle project structure")
+                  content = content.replace(anchor, anchor + "\n        " + repo_line, 1)
+                  path.write_text(content, encoding="utf-8")
+              print(f"JitPack configured in {path}")
+              break
+          else:
+              raise SystemExit("Neither android/build.gradle.kts nor android/build.gradle exists")
+          PYFIX
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Remove auto-generated sample test
+        run: rm -f test/widget_test.dart
+
+      - name: Run Dart tests
+        run: flutter test
+
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ownnode-android-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
   workflow_dispatch:
 
 permissions:
